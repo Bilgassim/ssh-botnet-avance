@@ -33,28 +33,35 @@ class SSHBotnet:
     def load_hosts(self, filepath=None):
         if not filepath:
             readline.parse_and_bind("tab: complete")
-            filepath = input("Enter path to hosts file (e.g. ../ssh-bot/ssh_formatted.txt): ").strip()
+            filepath = input("Enter path to hosts file: ").strip()
             
-        print(f"Loading hosts from {filepath}...\n")
         if not os.path.exists(filepath):
             print(colored(f"Error: {filepath} not found.", "red"))
             return
         
+        print(f"Loading hosts from {filepath}...")
+        self.hosts = []
         with open(filepath, "r") as f:
             for line in f:
                 line = line.strip()
                 if not line or line.startswith('#'):
                     continue
                 try:
-                    # Format: IP,user,password
-                    parts = line.split(',')
-                    if len(parts) == 3:
-                        ip, user, pw = parts
-                        self.hosts.append({'host': ip, 'user': user, 'port': 22, 'password': pw})
+                    # Support multiple formats: IP,user,pass OR IP user pass
+                    if ',' in line:
+                        parts = [p.strip() for p in line.split(',')]
                     else:
-                        print(colored(f"Skipping invalid line: {line}", "yellow"))
+                        parts = line.split()
+                    
+                    if len(parts) >= 3:
+                        ip, user, pw = parts[0], parts[1], parts[2]
+                        self.hosts.append({'host': ip, 'user': user, 'port': 22, 'password': pw})
+                    elif len(parts) == 1: # Just IP
+                        self.hosts.append({'host': parts[0], 'user': 'root', 'port': 22, 'password': None})
                 except Exception as e:
-                    print(colored(f"Error parsing line {line}: {e}", "red"))
+                    pass
+        
+        print(colored(f"[*] Loaded {len(self.hosts)} hosts.\n", "green"))
 
     def run_on_host(self, host_info, command, sudo_cmd=False):
         try:
