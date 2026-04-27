@@ -3,10 +3,15 @@ import sys
 import os
 import readline
 import glob
+import logging
 from fabric import Connection, Config
 from termcolor import colored
 import threading
 from concurrent.futures import ThreadPoolExecutor
+
+# Silence Paramiko and Fabric loggers
+logging.getLogger("paramiko").setLevel(logging.CRITICAL)
+logging.getLogger("fabric").setLevel(logging.CRITICAL)
 
 # enable tab autocomplete (used for local path)
 def complete(text, state):
@@ -18,8 +23,10 @@ readline.parse_and_bind("tab: complete")
 
 class SSHBotnet:
     def __init__(self):
-        self.hosts = [] # List of dicts: {'host': 'ip', 'user': 'user', 'port': 22, 'password': 'pw'}
+        self.hosts = [] # List of dicts
         self.running_hosts = {} # ip: status/info
+        self.processed_count = 0
+        self.lock = threading.Lock()
 
     def load_hosts(self, filepath=None):
         if not filepath:
@@ -38,30 +45,29 @@ class SSHBotnet:
                 if not line or line.startswith('#'):
                     continue
                 try:
-                    # Support multiple formats: IP,user,pass OR IP user pass
                     if ',' in line:
                         parts = [p.strip() for p in line.split(',')]
                     else:
                         parts = line.split()
                     
                     if len(parts) >= 3:
-                        ip, user, pw = parts[0], parts[1], parts[2]
-                        self.hosts.append({'host': ip, 'user': user, 'port': 22, 'password': pw})
-                    elif len(parts) == 1: # Just IP
+                        self.hosts.append({'host': parts[0], 'user': parts[1], 'port': 22, 'password': parts[2]})
+                    elif len(parts) == 1:
                         self.hosts.append({'host': parts[0], 'user': 'root', 'port': 22, 'password': None})
-                except Exception as e:
+                except:
                     pass
         
         print(colored(f"[*] Loaded {len(self.hosts)} hosts.\n", "green"))
 
     def run_on_host(self, host_info, command, sudo_cmd=False):
         try:
-            config = Config(overrides={'sudo': {'password': host_info['password']}})
+            # Config with short timeout for speed
+            config = Config(overrides={'sudo': {'password': host_info['password']}, 'timeout': 2})
             with Connection(
                 host=host_info['host'],
                 user=host_info['user'],
                 port=host_info['port'],
-                connect_kwargs={"password": host_info['password']},
+                connect_kwargs={"password": host_info['password'], "banner_timeout": 3, "auth_timeout": 3},
                 config=config,
                 connect_timeout=2
             ) as c:
@@ -69,25 +75,29 @@ class SSHBotnet:
                     result = c.sudo(command, hide=True, warn=True)
                 else:
                     result = c.run(command, hide=True, warn=True)
-                
-                if result.ok:
-                    return result.stdout.strip()
-                else:
-                    return f"Error: {result.stderr.strip()}"
-        except Exception as e:
+                return result.stdout.strip() if result.ok else f"Error: {result.stderr.strip()}"
+        except:
             return "Host Down"
 
     def check_hosts(self):
-        print("Checking hosts status...")
+        print(f"Checking {len(self.hosts)} hosts (this may take a while)...")
         self.running_hosts = {}
+        self.processed_count = 0
+        total = len(self.hosts)
         
         def check(h):
             res = self.run_on_host(h, "uname -a")
-            self.running_hosts[h['host']] = res
+            with self.lock:
+                self.running_hosts[h['host']] = res
+                self.processed_count += 1
+                if self.processed_count % 100 == 0 or self.processed_count == total:
+                    sys.stdout.write(f"\rProgress: [{self.processed_count}/{total}] hosts checked...")
+                    sys.stdout.flush()
 
-        with ThreadPoolExecutor(max_workers=10) as executor:
+        # Increase max_workers for speed, but keep it reasonable for system limits
+        with ThreadPoolExecutor(max_workers=50) as executor:
             executor.map(check, self.hosts)
-        print(colored("Host List Updated\n", "green"))
+        print(colored("\n[*] Host List Updated\n", "green"))
 
     def list_hosts(self):
         print("\n{0:5} | {1:30} | {2:15}".format("ID", "Host", "SysInfo"))
