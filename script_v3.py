@@ -3,8 +3,6 @@ import sys
 import os
 import readline
 import glob
-import socks
-import socket
 from fabric import Connection, Config
 from termcolor import colored
 import threading
@@ -19,16 +17,9 @@ readline.set_completer(complete)
 readline.parse_and_bind("tab: complete")
 
 class SSHBotnet:
-    def __init__(self, proxy_host=None, proxy_port=None):
+    def __init__(self):
         self.hosts = [] # List of dicts: {'host': 'ip', 'user': 'user', 'port': 22, 'password': 'pw'}
         self.running_hosts = {} # ip: status/info
-        self.proxy_host = proxy_host
-        self.proxy_port = proxy_port
-        
-        if self.proxy_host and self.proxy_port:
-            print(colored(f"[*] SOCKS5 Proxy enabled: {self.proxy_host}:{self.proxy_port}", "cyan"))
-            socks.set_default_proxy(socks.SOCKS5, self.proxy_host, self.proxy_port)
-            socket.socket = socks.socksocket
 
     def load_hosts(self, filepath=None):
         if not filepath:
@@ -213,13 +204,7 @@ def menu():
 def main():
     print(colored("--- SSH Botnet Advanced (Python 3) ---", "magenta", attrs=['bold']))
     
-    use_proxy = input("Use SOCKS5 proxy? (y/n) [default n]: ").lower().strip()
-    proxy_h, proxy_p = None, None
-    if use_proxy == 'y':
-        proxy_h = input("Proxy Host [127.0.0.1]: ").strip() or "127.0.0.1"
-        proxy_p = int(input("Proxy Port [9050]: ").strip() or "9050")
-    
-    botnet = SSHBotnet(proxy_h, proxy_p)
+    botnet = SSHBotnet()
     botnet.load_hosts()
     botnet.check_hosts()
     
