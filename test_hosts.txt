@@ -1,5 +1,0 @@
-201.208.88.157,root,toor
-2.50.11.107,root,toor
-61.219.62.149,root,toor
-201.208.87.74,root,toor
-175.99.159.26,root,toor

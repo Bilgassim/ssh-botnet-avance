@@ -30,7 +30,7 @@ pip install fabric termcolor
 
 1. Lancez le script :
    ```bash
-   python3 script_v3.py
+   python3 script.py
    ```
 
 2. Entrez le chemin vers votre fichier de cibles lorsqu'il est demandé.
@@ -58,7 +58,7 @@ Le fichier doit contenir un hôte par ligne sous l'une des formes suivantes :
 
 ## Sécurité et Performance
 - Le script utilise un timeout de 2 secondes par hôte pour garantir une vitesse de scan maximale.
-- Le nombre de threads (workers) peut être ajusté dans le fichier `script_v3.py` (classe `SSHBotnet`, méthode `check_hosts`).
+- Le nombre de threads (workers) peut être ajusté dans le fichier `script.py` (classe `SSHBotnet`, méthode `check_hosts`).
 
 ## Auteur
 Bilgassim
