@@ -1,106 +1,64 @@
-# ssh botnet 
-add ssh credentials into 'creds.txt' file and run './script.py'
+# SSH Botnet Advanced (Python 3)
 
-## Example
-```shell
-root@kali:~/script/ssh_botnet# ./script.py 
-Loading hosts...
+Une version avancée et optimisée du SSH Botnet, portée sous Python 3 avec un support multithread pour les scans de masse.
 
-[0] List Hosts
-[1] Active Hosts
-[2] Update Hosts
-[3] Run Command
-[4] Open Shell
-[5] File Upload
-[6] File Download
-[7] Script Exec
-[8] Exit
+## Caractéristiques
+- **Portage Python 3** : Entièrement compatible avec les environnements modernes.
+- **Multithreading** : Utilise `ThreadPoolExecutor` pour scanner et exécuter des commandes sur des milliers d'hôtes en parallèle (50 workers par défaut).
+- **Scan de masse** : Optimisé pour gérer des listes de plus de 150 000 hôtes.
+- **Silence des logs** : Les erreurs de protocole SSH (bannières, timeouts) sont capturées silencieusement pour un affichage propre.
+- **Indicateur de progression** : Suivi dynamique en temps réel lors de la vérification des hôtes.
+- **Format flexible** : Supporte les fichiers d'identifiants au format CSV (`IP,user,password`) ou avec espaces.
+- **Menu interactif** : Gestion complète des hôtes (listage, exécution de commandes, upload/download de fichiers, exécution de scripts).
 
-C&C $> 0
+## Installation
 
-ID    | Host                           | SysInfo        
-------------------------------------------------------------
-    0 | root@127.0.0.1:22              | Linux kali 4.0.0-kali1-amd64
-    1 | root@192.168.6.100:22          | Linux sk-srv16 3.11.0-18-generic 
+### Dépendances système
+L'outil utilise `Fabric` et `Termcolor`. Sur Kali Linux :
 
-
-[0] List Hosts
-[1] Active Hosts
-[2] Update Hosts
-[3] Run Command
-[4] Open Shell
-[5] File Upload
-[6] File Download
-[7] Script Exec
-[8] Exit
-
-C&C $> 1
-
-ID    | Host                           | SysInfo        
-------------------------------------------------------------
-    0 | root@127.0.0.1:22              | Linux kali 4.0.0-kali1-amd64
-    1 | root@192.168.6.100:22          | Linux sk-srv16 3.11.0-18-generic 
-
-
-Active Hosts:
-ID	    Host			        Status
-----	---------------		    ---------------------
-0	    root@127.0.0.1:22	    12:07:32 up  2:42,  3 users,  load average: 0.42, 0.29, 0.29
-1	    root@192.168.6.100:22	12:07:33 up 227 days, 22:59,  1 user,  load average: 0.23, 0.06, 0.06
-
-
-[0] List Hosts
-[1] Active Hosts
-[2] Update Hosts
-[3] Run Command
-[4] Open Shell
-[5] File Upload
-[6] File Download
-[7] Script Exec
-[8] Exit
-
-C&C $> 3
-
-ID    | Host                           | SysInfo        
-------------------------------------------------------------
-    0 | root@127.0.0.1:22              | Linux kali 4.0.0-kali1-amd64
-    1 | root@192.168.6.100:22          | Linux sk-srv16 3.11.0-18-generic 
-
-
-Command: id
-Hosts id (0 1 2... / all) [default is all]: 
-
-[root@192.168.6.100:22]: id
---------------------------------------------------------------------------------
-uid=0(root) gid=0(root) groups=0(root)
-
-
-[root@127.0.0.1:22]: id
---------------------------------------------------------------------------------
-uid=0(root) gid=0(root) groups=0(root)
-
-[0] List Hosts
-[1] Active Hosts
-[2] Update Hosts
-[3] Run Command
-[4] Open Shell
-[5] File Upload
-[6] File Download
-[7] Script Exec
-[8] Exit
-
-C&C $> 4
-
-ID    | Host                           | SysInfo        
-------------------------------------------------------------
-    0 | root@127.0.0.1:22              | Linux kali 4.0.0-kali1-amd64 
-    1 | root@192.168.6.100:22          | Linux sk-srv16 3.11.0-18-generic 
-
-
-Host id: 0
-[root@127.0.0.1:22] Executing task 'open_shell'
-Last login: Tue Jun 21 10:38:12 2016 from localhost
-root@kali:~# id
-uid=0(root) gid=0(root) groups=0(root)
-root@kali:~#
+```bash
+sudo apt update
+sudo apt install -y python3-fabric python3-termcolor
 ```
+
+### Installation manuelle via pip
+```bash
+pip install fabric termcolor
+```
+
+## Utilisation
+
+1. Lancez le script :
+   ```bash
+   python3 script_v3.py
+   ```
+
+2. Entrez le chemin vers votre fichier de cibles lorsqu'il est demandé.
+   *Exemple : `/home/kali/Desktop/ssh-bot/ssh_formatted.txt`*
+
+3. Attendez la fin de la vérification des hôtes (suivez la barre de progression).
+
+4. Utilisez le menu interactif :
+   - `[0] List Hosts` : Affiche tous les hôtes et leur système.
+   - `[1] Active Hosts` : Liste uniquement les hôtes qui ont répondu positivement.
+   - `[3] Run Command` : Exécute une commande shell sur un ou plusieurs hôtes.
+   - `[5] File Upload` : Envoie un fichier local vers les hôtes sélectionnés.
+   - `[7] Script Exec` : Télécharge et exécute un script en arrière-plan sur les hôtes.
+
+## Format du fichier d'hôtes
+Le fichier doit contenir un hôte par ligne sous l'une des formes suivantes :
+- `IP,utilisateur,mot_de_passe`
+- `IP utilisateur mot_de_passe`
+
+*Exemple :*
+```text
+192.168.1.10,root,toor
+10.0.0.5 admin password123
+```
+
+## Sécurité et Performance
+- Le script utilise un timeout de 2 secondes par hôte pour garantir une vitesse de scan maximale.
+- Le nombre de threads (workers) peut être ajusté dans le fichier `script_v3.py` (classe `SSHBotnet`, méthode `check_hosts`).
+
+## Auteur
+Bilgassim
