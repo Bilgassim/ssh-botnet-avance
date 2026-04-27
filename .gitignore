@@ -1,0 +1,21 @@
+# Logs
+*.log
+botnet.log
+
+# Rapports
+*_report.txt
+my_report.txt
+
+# Credentials et Tests (Sécurité)
+creds.txt
+test_creds.txt
+test_payload.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Système
+.DS_Store
+.script.py.swp
